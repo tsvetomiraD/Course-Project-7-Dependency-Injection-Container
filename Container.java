@@ -2,6 +2,8 @@ package dic;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
 import java.util.*;
 
 class Container {
@@ -9,6 +11,7 @@ class Container {
     Map<String, Object> classes = new HashMap<>();
     Map<Class<?>, Class<?>> impls = new HashMap<>();
     List<Class<?>> startedClass = new ArrayList<>();
+    List<Class<?>> addedProxyLazy = new ArrayList<>();
     Properties properties;
 
     public Container(Properties properties) {
@@ -22,6 +25,13 @@ class Container {
     public <T> T getInstance(Class<T> c) throws Exception {
         if (classes.containsKey(c.getName())) {
             return (T) classes.get(c.getName());
+        }
+        Lazy lazy = c.getDeclaredAnnotation(Lazy.class);
+        if (lazy != null) {
+            if (!addedProxyLazy.contains(c)) {
+                addedProxyLazy.add(c);
+                return (T) new LazyClass(this);
+            }
         }
 
         Class<?> classImpl = null;
@@ -153,5 +163,17 @@ class Container {
 
     public void registerInstance(Object instance) {
         classes.put(instance.getClass().getName(), instance);
+    }
+}
+
+class LazyClass implements InvocationHandler {
+    Container container;
+    LazyClass(Container con) {
+        this.container = con;
+    }
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        container.getInstance(method.getClass());
+        return method;
     }
 }
